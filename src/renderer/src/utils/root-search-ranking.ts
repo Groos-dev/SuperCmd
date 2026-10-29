@@ -133,14 +133,27 @@ const MATCH_KIND_RANK: Record<MatchKind, number> = {
   url: 4,
 };
 
+// Scoring normalizes every candidate field on every keystroke while only the
+// query changes. Field values are stable, so memoize the normalization result.
+const NORMALIZED_TEXT_CACHE_LIMIT = 6000;
+const normalizedTextCache = new Map<string, string>();
+
 export function normalizeRootSearchText(value: string): string {
-  return String(value || '')
+  const raw = String(value || '');
+  const cached = normalizedTextCache.get(raw);
+  if (cached !== undefined) return cached;
+
+  const normalized = raw
     .normalize('NFKD')
     .replace(COMBINING_MARK_REGEX, '')
     .toLowerCase()
     .replace(SEARCH_SEPARATOR_REGEX, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+  if (normalizedTextCache.size >= NORMALIZED_TEXT_CACHE_LIMIT) normalizedTextCache.clear();
+  normalizedTextCache.set(raw, normalized);
+  return normalized;
 }
 
 export function compactRootSearchText(value: string): string {

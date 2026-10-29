@@ -72,6 +72,8 @@ export interface CommandInfo {
   title: string;
   subtitle?: string;
   keywords?: string[];
+  /** Alternate names that match like user-defined aliases (e.g. localized app names) */
+  aliases?: string[];
   iconDataUrl?: string;
   iconEmoji?: string;
   iconName?: string;
@@ -119,7 +121,7 @@ const STALE_REFRESH_COOLDOWN_MS = 15_000;
 // and are re-attached on load.  Bump the version when CommandInfo shape changes
 // in a breaking way.
 
-const COMMANDS_DISK_CACHE_VERSION = 1;
+const COMMANDS_DISK_CACHE_VERSION = 4;
 let commandsDiskCachePath: string | null = null;
 
 function getCommandsDiskCachePath(): string {
@@ -462,23 +464,24 @@ function normalizeAppSearchText(value: string): string {
 function buildAppKeywords(
   displayName: string,
   rawName: string,
-  bundleId?: string
+  bundleId?: string,
+  extraNames: Array<string | undefined> = []
 ): string[] {
   const set = new Set<string>();
-  const add = (value: string) => {
-    const normalized = normalizeAppSearchText(value);
+  const add = (value: string | undefined) => {
+    const normalized = normalizeAppSearchText(String(value || ''));
     if (normalized) set.add(normalized);
   };
 
   add(displayName);
   add(rawName);
-  if (bundleId) add(bundleId);
-
-  const compactRaw = rawName.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
-  if (compactRaw) set.add(compactRaw);
+  add(bundleId);
+  for (const extraName of extraNames) add(extraName);
 
   const values = Array.from(set);
   for (const value of values) {
+    const compact = value.replace(/[^\p{L}\p{N}]+/gu, '');
+    if (compact) set.add(compact);
     for (const token of value.split(/\s+/g)) {
       if (token.length >= 2) set.add(token);
     }
@@ -889,6 +892,80 @@ async function resolveLocalizedBundleDisplayName(
   return undefined;
 }
 
+/**
+ * Collect every localized display name a bundle ships, with the system-resolved
+ * name first. Apps whose Finder name differs from their localized name (e.g.
+ * Lark.app → Feishu / 飞书) stay searchable under either name. Runs a single
+ * osascript per bundle and falls back to the single-name resolver.
+ */
+async function resolveAllLocalizedBundleNames(
+  bundlePath: string,
+  keys: string[]
+): Promise<string[]> {
+  const normalizedKeys = keys.map((key) => String(key || '').trim()).filter(Boolean);
+  if (normalizedKeys.length === 0 || !fs.existsSync(bundlePath)) return [];
+
+  const script = `
+ObjC.import("Foundation");
+
+const bundlePath = ${JSON.stringify(bundlePath)};
+const keys = ${JSON.stringify(normalizedKeys)};
+
+function unwrapString(value) {
+  if (!value) return "";
+  try {
+    const unwrapped = ObjC.unwrap(value);
+    if (typeof unwrapped === "string") return unwrapped.trim();
+    if (unwrapped === null || unwrapped === undefined) return "";
+    return String(unwrapped).trim();
+  } catch (_error) {
+    return "";
+  }
+}
+
+const names = [];
+function push(value) {
+  const name = unwrapString(value);
+  if (name && names.indexOf(name) === -1) names.push(name);
+}
+
+const bundle = $.NSBundle.bundleWithPath($(bundlePath));
+if (bundle) {
+  for (const key of keys) push(bundle.objectForInfoDictionaryKey($(key)));
+
+  let locales = [];
+  try {
+    locales = ObjC.deepUnwrap(bundle.localizations).map(String);
+  } catch (_error) {
+    locales = [];
+  }
+  const resourcesDir = bundlePath + "/Contents/Resources";
+  for (const locale of locales) {
+    const dict = $.NSDictionary.dictionaryWithContentsOfFile(
+      $(resourcesDir + "/" + locale + ".lproj/InfoPlist.strings")
+    );
+    if (!dict) continue;
+    for (const key of keys) push(dict.objectForKey($(key)));
+  }
+}
+
+JSON.stringify(names);
+`;
+
+  try {
+    const { stdout } = await execFileAsync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script]);
+    const parsed = JSON.parse(String(stdout || '').trim() || '[]');
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed.filter(
+        (name): name is string => typeof name === 'string' && name.trim().length > 0
+      );
+    }
+  } catch {}
+
+  const singleName = await resolveLocalizedBundleDisplayName(bundlePath, ...normalizedKeys);
+  return singleName ? [singleName] : [];
+}
+
 async function discoverSettingsSearchTermCommands(
   bundlePath: string,
   pane: CommandInfo,
@@ -1019,12 +1096,21 @@ async function discoverApplications(): Promise<CommandInfo[]> {
 
         const rawName = path.basename(appPath, '.app');
         const fallbackDisplayName = String(info?.CFBundleDisplayName || info?.CFBundleName || '').trim();
-        const localizedDisplayName = await resolveLocalizedBundleDisplayName(
-          appPath,
+        const localizedNames = await resolveAllLocalizedBundleNames(appPath, [
           'CFBundleDisplayName',
-          'CFBundleName'
-        );
+          'CFBundleName',
+        ]);
+        const localizedDisplayName = localizedNames[0];
         const name = canonicalAppTitle(rawName || localizedDisplayName || fallbackDisplayName);
+        const aliases = Array.from(
+          new Set(
+            [
+              String(info?.CFBundleName || '').trim(),
+              String(info?.CFBundleDisplayName || '').trim(),
+              ...localizedNames,
+            ].filter((alias) => alias.length > 0 && alias !== name)
+          )
+        );
         const bundleId =
           typeof info?.CFBundleIdentifier === 'string'
             ? info.CFBundleIdentifier
@@ -1041,7 +1127,13 @@ async function discoverApplications(): Promise<CommandInfo[]> {
         return {
           id,
           title: name,
-          keywords: buildAppKeywords(name, rawName, bundleId),
+          keywords: buildAppKeywords(name, rawName, bundleId, [
+            String(info?.CFBundleName || ''),
+            String(info?.CFBundleDisplayName || ''),
+            String(info?.CFBundleExecutable || ''),
+            ...localizedNames,
+          ]),
+          aliases,
           iconDataUrl,
           category: 'app' as const,
           path: appPath,

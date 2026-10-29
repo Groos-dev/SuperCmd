@@ -92,12 +92,23 @@ function buildCoreIconStyle(
 
 const SEARCH_TOKEN_SPLIT_REGEX = /[^\p{L}\p{N}]+/gu;
 
+const NORMALIZED_SEARCH_TEXT_LIMIT = 6000;
+const normalizedSearchTextCache = new Map<string, string>();
+
 function normalizeSearchText(value: string): string {
-  return String(value || '')
+  const raw = String(value || '');
+  const cached = normalizedSearchTextCache.get(raw);
+  if (cached !== undefined) return cached;
+
+  const normalized = raw
     .normalize('NFKD')
     .toLowerCase()
     .replace(SEARCH_TOKEN_SPLIT_REGEX, ' ')
     .trim();
+
+  if (normalizedSearchTextCache.size >= NORMALIZED_SEARCH_TEXT_LIMIT) normalizedSearchTextCache.clear();
+  normalizedSearchTextCache.set(raw, normalized);
+  return normalized;
 }
 
 function tokenizeSearchText(value: string): string[] {
@@ -355,6 +366,7 @@ export function rankCommands(
       const scored = scoreRootSearchFields(query, [
         { value: command.title, kind: 'label', weight: 1 },
         { value: alias, kind: 'alias', weight: 1.06 },
+        ...(command.aliases || []).map((name) => ({ value: name, kind: 'alias' as const, weight: 0.9 })),
         { value: command.subtitle, kind: 'description', weight: 0.74 },
         ...(command.keywords || []).map((keyword) => ({ value: keyword, kind: 'description' as const, weight: 0.7 })),
       ]);

@@ -7,6 +7,8 @@ export interface CommandInfo {
   title: string;
   subtitle?: string;
   keywords?: string[];
+  /** Alternate names that match like user-defined aliases (e.g. localized app names) */
+  aliases?: string[];
   iconDataUrl?: string;
   iconEmoji?: string;
   iconName?: string;

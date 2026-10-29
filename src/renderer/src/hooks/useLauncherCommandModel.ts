@@ -9,7 +9,7 @@ import type {
 import type { BrowserSearchResult, useBrowserSearch } from './useBrowserSearch';
 import type { CalcResult } from '../smart-calculator';
 import { tryCalculate, tryCalculateAsync } from '../smart-calculator';
-import { filterCommands, rankCommands } from '../utils/command-helpers';
+import { filterCommands } from '../utils/command-helpers';
 import {
   asTildePath,
   buildFileResultCommandId,
@@ -526,12 +526,13 @@ export function useLauncherCommandModel({
       cmd.id !== WEB_SEARCH_COMMAND_ID &&
       (!hiddenListOnlyCommandIds.has(cmd.id) || hasSearchQuery)
     );
-    return rankCommands(searchableCommands, searchQuery, commandAliases)
-      .map(({ command }) => {
+    return searchableCommands
+      .map((command) => {
         const alias = commandAliases[command.id] || '';
         const scored = scoreRootSearchFields(searchQuery, [
           { value: command.title, kind: 'label', weight: 1 },
           { value: alias, kind: 'alias', weight: 1.08 },
+          ...(command.aliases || []).map((name) => ({ value: name, kind: 'alias' as const, weight: 0.9 })),
           { value: command.subtitle, kind: 'description', weight: 0.74 },
           ...(command.keywords || []).map((keyword) => ({ value: keyword, kind: 'description' as const, weight: 0.68 })),
         ]);
