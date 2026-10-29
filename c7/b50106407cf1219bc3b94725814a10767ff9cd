@@ -1,0 +1,48 @@
+src/main/commands.ts
+  s_74f02beb62dc98::t_185f4f32550889 1130-1133,1135
+  s_74f02beb62dc98::t_3d442874a42d4f 467-468,471-472,478-479,483-484
+  s_74f02beb62dc98::t_07c2e814f32f70 1134
+  s_74f02beb62dc98::t_63bfe9fb8cb153 1105-1113
+  s_74f02beb62dc98::t_4ff0e5e6d051a0 1099,1101-1103
+  s_74f02beb62dc98::t_1752110c9d8263 75-76
+  s_74f02beb62dc98::t_9abec45b989976 124
+  s_74f02beb62dc98::t_e2e402b2a6f89d 968
+  s_74f02beb62dc98::t_277bcf6ae06769 895-967
+  s_74f02beb62dc98::t_774efd97188965 1136
+src/renderer/src/hooks/useLauncherCommandModel.ts
+  s_74f02beb62dc98::t_28031286ab5b06 12
+  s_74f02beb62dc98::t_c26ca0e67278e5 529-530
+  s_74f02beb62dc98::t_3772cf5a85e64d 535
+src/main/main.ts
+  s_74f02beb62dc98::t_739ede98b1e1cf 16252-16253,16256-16257,16259-16260,16266
+  s_74f02beb62dc98::t_ac393a802019a2 16254-16255,16261-16265,16269-16275,16277-16278
+src/renderer/types/electron.d.ts
+  s_74f02beb62dc98::t_4d78fa1cdb24b0 10-11
+src/renderer/src/utils/command-helpers.tsx
+  s_74f02beb62dc98::t_3350a79414ea31 369
+  s_74f02beb62dc98::t_6ce88e91a7a4bb 95-97,99-103,108-111
+src/renderer/src/App.tsx
+  s_74f02beb62dc98::t_1b7371e05566dc 1341-1356,1358-1369
+  s_74f02beb62dc98::t_868735fe5fb417 126-129
+scripts/test-search-normalize-cache.mjs
+  s_74f02beb62dc98::t_ddf03ac0d963a8 1-56,58-78
+  s_74f02beb62dc98::t_2510cc65bf389b 57
+src/renderer/src/utils/root-search-ranking.ts
+  s_74f02beb62dc98::t_78f945157a55f8 136-140,142-146,153-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "c7b50106407cf1219bc3b94725814a10767ff9cd",
+  "prompts": {},
+  "sessions": {
+    "s_74f02beb62dc98": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_rxvd5ro6wh6r",
+        "model": "auto(free)"
+      },
+      "human_author": "groos <gegu926@gmail.com>"
+    }
+  }
+}
