@@ -123,6 +123,10 @@ import {
   type RootSearchRankingState,
 } from './utils/root-search-ranking';
 
+// Icons for the visible rows load first; the tail of the file section fills in
+// after the query settles so one keystroke can't trigger 30 icon extractions.
+const LAUNCHER_FILE_ICON_EAGER_COUNT = 8;
+
 const BROWSER_APP_PATHS: Partial<Record<BrowserSearchSource, string[]>> = {
   chrome: [
     '/Applications/Google Chrome.app',
@@ -1334,25 +1338,35 @@ const App: React.FC = () => {
           if (fileSearchRequestSeqRef.current !== requestSeq) return;
           setLauncherFileResults(results);
 
-          const iconTargets = results.slice(0, MAX_LAUNCHER_FILE_RESULT_ICONS);
-          const iconEntries = await Promise.all(
-            iconTargets.map(async (result) => {
-              try {
-                const dataUrl = await window.electron.getFileIconDataUrl(result.path, 20);
-                return [result.path, dataUrl || ''] as const;
-              } catch {
-                return [result.path, ''] as const;
+          const loadFileIcons = async (targets: typeof results) => {
+            const iconEntries = await Promise.all(
+              targets.map(async (result) => {
+                try {
+                  const dataUrl = await window.electron.getFileIconDataUrl(result.path, 20);
+                  return [result.path, dataUrl || ''] as const;
+                } catch {
+                  return [result.path, ''] as const;
+                }
+              })
+            );
+            if (fileSearchRequestSeqRef.current !== requestSeq) return;
+            setLauncherFileIcons((prev) => {
+              const next = { ...prev };
+              for (const [targetPath, icon] of iconEntries) {
+                if (icon) next[targetPath] = icon;
               }
-            })
-          );
-          if (fileSearchRequestSeqRef.current !== requestSeq) return;
-          setLauncherFileIcons((prev) => {
-            const next = { ...prev };
-            for (const [targetPath, icon] of iconEntries) {
-              if (icon) next[targetPath] = icon;
-            }
-            return next;
-          });
+              return next;
+            });
+          };
+
+          const iconTargets = results.slice(0, MAX_LAUNCHER_FILE_RESULT_ICONS);
+          await loadFileIcons(iconTargets.slice(0, LAUNCHER_FILE_ICON_EAGER_COUNT));
+          if (iconTargets.length > LAUNCHER_FILE_ICON_EAGER_COUNT) {
+            window.setTimeout(() => {
+              if (fileSearchRequestSeqRef.current !== requestSeq) return;
+              void loadFileIcons(iconTargets.slice(LAUNCHER_FILE_ICON_EAGER_COUNT));
+            }, 160);
+          }
         } catch (error) {
           console.error('Failed to search indexed files for launcher:', error);
           if (fileSearchRequestSeqRef.current === requestSeq) {

@@ -16249,13 +16249,33 @@ return appURL's |path|() as text`,
     }
   });
 
+  // Up to 30 rows request an icon per query; cache the encoded data URLs so
+  // repeated prefixes and re-opened launchers skip the extraction entirely.
+  // Failures stay uncached so a transient miss can recover on the next query.
+  const fileIconDataUrlCache = new Map<string, string>();
+  const FILE_ICON_DATA_URL_CACHE_LIMIT = 1000;
+
   ipcMain.handle('get-file-icon-data-url', async (_event: any, filePath: string, size = 20) => {
+    const cacheKey = `${size}:${filePath}`;
+    const cached = fileIconDataUrlCache.get(cacheKey);
+    if (cached) {
+      fileIconDataUrlCache.delete(cacheKey);
+      fileIconDataUrlCache.set(cacheKey, cached);
+      return cached;
+    }
+
     try {
       const icon = await app.getFileIcon(filePath, { size: size <= 16 ? 'small' : size >= 64 ? 'large' : 'normal' });
-      if (icon && !icon.isEmpty()) {
-        return icon.resize({ width: size, height: size }).toDataURL();
+      if (!icon || icon.isEmpty()) return null;
+      const dataUrl = icon.resize({ width: size, height: size }).toDataURL();
+      if (!dataUrl) return null;
+
+      if (fileIconDataUrlCache.size >= FILE_ICON_DATA_URL_CACHE_LIMIT) {
+        const oldestKey = fileIconDataUrlCache.keys().next();
+        if (!oldestKey.done) fileIconDataUrlCache.delete(oldestKey.value);
       }
-      return null;
+      fileIconDataUrlCache.set(cacheKey, dataUrl);
+      return dataUrl;
     } catch {
       return null;
     }
